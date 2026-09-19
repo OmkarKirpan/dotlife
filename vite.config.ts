@@ -3,7 +3,13 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { defineConfig } from 'vite';
 
+// Where the app is served from. Defaults to the domain root (Cloudflare Pages,
+// a custom domain); GitHub Pages project sites live under /<repo>/, so the
+// deploy workflow sets BASE_PATH accordingly. Always has a trailing slash.
+const base = (process.env.BASE_PATH ?? '/').replace(/\/*$/, '/');
+
 export default defineConfig({
+  base,
   plugins: [
     react(),
     VitePWA({
@@ -14,9 +20,9 @@ export default defineConfig({
         name: 'Dotlife',
         short_name: 'Dotlife',
         description: 'How much time is left, as a grid of dots.',
-        id: '/',
-        start_url: '/',
-        scope: '/',
+        id: base,
+        start_url: base,
+        scope: base,
         display: 'standalone',
         orientation: 'portrait',
         background_color: '#0c0c0e',
@@ -29,7 +35,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
-        navigateFallback: '/index.html',
+        navigateFallback: `${base}index.html`,
         cleanupOutdatedCaches: true,
       },
     }),

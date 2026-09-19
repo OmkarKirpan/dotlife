@@ -45,6 +45,18 @@ CLI: `npx wrangler login`, then `npm run deploy`.
 `public/_headers` stops the service worker, manifest and HTML from being cached, and lets hashed
 assets be cached forever. Updates come through `registerType: 'autoUpdate'`.
 
+## Deploy (GitHub Pages)
+
+`.github/workflows/deploy.yml` tests, builds and publishes on every push to `main`, and can be run
+by hand from the Actions tab. One-time setup: **Settings → Pages → Source → GitHub Actions**.
+
+A project site is served from `/<repo>/`, so the workflow builds with `BASE_PATH=/dotlife/`. The
+base is read from `BASE_PATH` in `vite.config.ts` and feeds the manifest `id`, `start_url` and
+`scope` as well as the service worker registration; it defaults to `/`, so the Cloudflare build
+above is unaffected. On a custom domain at the root, set `BASE_PATH: /` in the workflow.
+
+`public/_headers` is Cloudflare-only — GitHub Pages ignores it and sends its own cache headers.
+
 ## Design
 
 | Scope | 1 dot = | Dots |
