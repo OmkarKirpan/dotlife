@@ -1,5 +1,6 @@
 import { memo, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import { cellOf, computeLayout, nearestIndex, type Layout } from '../domain/grid';
+import { cellOf, computeLayout, dotRadius, nearestIndex, rowRuns, type Layout } from '../domain/grid';
+import type { Overlay } from '../domain/overlay';
 import type { Resolved } from '../domain/time';
 import { useSize } from '../hooks';
 
@@ -16,6 +17,8 @@ interface Props {
   lens: 'left' | 'since';
   /** Day/week dots only: a drag maps to a date range. */
   draggable: boolean;
+  /** Your fixed spans, drawn behind the dots. */
+  overlays?: Overlay[];
   /** Called while pressing: the dot under the finger, or the dragged range. */
   onPreview: (sel: Selection | null) => void;
   onCreate: (sel: Selection) => void;
@@ -23,8 +26,34 @@ interface Props {
 
 const HOLD_MS = 450;
 
+const OverlayLayer = memo(function OverlayLayer({ layout, overlays }: { layout: Layout; overlays: Overlay[] }) {
+  const pitch = layout.pitch;
+  const inset = pitch * 0.08;
+  const caps = [];
+  for (const o of overlays) {
+    // Deeper lanes sit inside shallower ones, so overlapping spans stay countable.
+    const pad = inset + o.lane * pitch * 0.11;
+    const h = pitch - 2 * pad;
+    if (h <= 0) continue;
+    for (const run of rowRuns(layout, o.lo, o.hi)) {
+      caps.push(
+        <rect
+          key={`${o.id}-${run.row}`}
+          x={run.col * pitch + inset}
+          y={run.row * pitch + pad}
+          width={run.len * pitch - 2 * inset}
+          height={h}
+          rx={h / 2}
+          fill={o.color}
+        />,
+      );
+    }
+  }
+  return <g className="ov">{caps}</g>;
+});
+
 const DotLayer = memo(function DotLayer({ layout, r }: { layout: Layout; r: Resolved }) {
-  const rad = layout.pitch * (layout.pitch < 12 ? 0.4 : 0.36);
+  const rad = dotRadius(layout.pitch);
   const dots = [];
   for (let i = 0; i < r.total; i++) {
     const { col, row } = cellOf(layout, i);
@@ -54,7 +83,7 @@ interface Drag {
   held: boolean;
 }
 
-export function Grid({ r, preferredCols, lens, draggable, onPreview, onCreate }: Props) {
+export function Grid({ r, preferredCols, lens, draggable, overlays, onPreview, onCreate }: Props) {
   const [boxRef, size] = useSize<HTMLDivElement>();
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -141,6 +170,7 @@ export function Grid({ r, preferredCols, lens, draggable, onPreview, onCreate }:
           onPointerCancel={() => end(false)}
           onLostPointerCapture={() => drag.current && end(false)}
         >
+          {overlays && overlays.length > 0 && <OverlayLayer layout={layout} overlays={overlays} />}
           <DotLayer layout={layout} r={r} />
           {sel && <SelectionLayer layout={layout} sel={sel} />}
         </svg>

@@ -176,3 +176,15 @@ export function daysLeftInCurrentYear(now: Date): number {
 export function nextLocalMidnight(now: Date): Date {
   return startOfDay(addDays(now, 1));
 }
+
+/**
+ * Chronological dot index containing `date`, or null when the scope is not
+ * date-dotted or the date falls outside it. The inverse of `dotStart`.
+ */
+export function dotIndexOfDate(r: Resolved, date: Date): number | null {
+  if (!isDateDotted(r)) return null;
+  const days = differenceInCalendarDays(date, r.start);
+  if (days < 0) return null;
+  const i = r.unit === 'week' ? Math.floor(days / 7) : days;
+  return i > r.total - 1 ? null : i;
+}

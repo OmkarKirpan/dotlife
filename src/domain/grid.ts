@@ -97,3 +97,43 @@ export function nearestIndex(l: Layout, x: number, y: number): number {
   if (i !== null) return i;
   return l.partial - 1; // empty cell in the bottom row
 }
+
+/** Dot radius for a given pitch. Shared so the grid and the wallpaper can't drift. */
+export const dotRadius = (pitch: number) => pitch * (pitch < 12 ? 0.4 : 0.36);
+
+/** Inclusive index range held by `row`, or null when the row is outside the grid. */
+export function rowIndexRange(l: Layout, row: number): { lo: number; hi: number } | null {
+  if (row < 0 || row >= l.rows) return null;
+  const fromBottom = l.rows - 1 - row;
+  if (l.partial > 0 && fromBottom === 0) return { lo: 0, hi: l.partial - 1 };
+  const full = fromBottom - (l.partial > 0 ? 1 : 0);
+  const lo = l.partial + full * l.cols;
+  return { lo, hi: Math.min(lo + l.cols - 1, l.count - 1) };
+}
+
+/** A horizontal stretch of one row: `len` dots starting at `col`. */
+export interface Run {
+  row: number;
+  col: number;
+  len: number;
+}
+
+/**
+ * Split the inclusive index range [lo, hi] into per-row runs, bottom-up so the
+ * runs come out in chronological order. Iterates rows, not indices, so a span
+ * covering the whole Life grid costs ~81 steps rather than 4,175.
+ */
+export function rowRuns(l: Layout, lo: number, hi: number): Run[] {
+  const runs: Run[] = [];
+  if (hi < lo) return runs;
+  for (let fromBottom = 0; fromBottom < l.rows; fromBottom++) {
+    const row = l.rows - 1 - fromBottom;
+    const range = rowIndexRange(l, row);
+    if (!range) continue;
+    const a = Math.max(lo, range.lo);
+    const b = Math.min(hi, range.hi);
+    if (a > b) continue;
+    runs.push({ row, col: a - range.lo, len: b - a + 1 });
+  }
+  return runs;
+}

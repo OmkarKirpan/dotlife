@@ -112,6 +112,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .grid.pressing .dot { opacity: 0.55; }
 .sel circle { fill: var(--text); }
 
+/* Your spans, behind the dots. The fill channel already means elapsed vs
+   remaining, so an overlay may only tint the space around a dot. */
+.ov { pointer-events: none; }
+.ov rect { opacity: 0.22; }
+.grid.pressing .ov rect { opacity: 0.14; }
+
 /* ---- ahead ----------------------------------------------------------- */
 .ahead { flex: 1; overflow-y: auto; padding: 8px 10px 16px; }
 .ahead .row { padding: 14px 10px; flex-direction: column; align-items: flex-start; gap: 3px; }
