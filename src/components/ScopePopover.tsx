@@ -10,11 +10,12 @@ interface Props {
   now: Date;
   onSelect: (id: string) => void;
   onEdit: (span: FixedSpan) => void;
+  onWallpaper: () => void;
   onSettings: () => void;
   onClose: () => void;
 }
 
-export function ScopePopover({ spans, activeId, now, onSelect, onEdit, onSettings, onClose }: Props) {
+export function ScopePopover({ spans, activeId, now, onSelect, onEdit, onWallpaper, onSettings, onClose }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,6 +73,9 @@ export function ScopePopover({ spans, activeId, now, onSelect, onEdit, onSetting
         </div>
       )}
       <div className="pop-section">
+        <button className="row subtle" onClick={onWallpaper}>
+          <span className="row-title">Wallpaper…</span>
+        </button>
         <button className="row subtle" onClick={onSettings}>
           <span className="row-title">Settings, export &amp; import</span>
         </button>

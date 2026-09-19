@@ -11,6 +11,11 @@ No backend, no accounts, no analytics. Your data lives in this browser's Indexed
 - **Make a span**: on any day- or week-dotted grid, drag across dots, or press and hold one dot for a single day.
   It saves when you let go, named from its dates (`Sep 28 – Oct 28`). **Undo** is in the toast.
 - **Rename or delete**: press and hold a span in the scope menu or in Ahead (right-click on desktop).
+- **See your spans**: they are drawn as tinted bands on any day- or week-dotted grid, so a trip shows
+  up inside your year. Press a dot to name the spans covering it. Settings → Grid turns them off.
+- **Wallpaper**: scope menu → Wallpaper. Draws the current grid at your phone's resolution, with the
+  scope name and headline, and the top kept clear for the lock-screen clock. Share it (on iPhone:
+  Save to Photos, then set it as the wallpaper), or download the PNG or the SVG.
 - **Back up**: Settings → Copy JSON or Download. Import checks `version` and rejects the whole file
   if anything is wrong. You choose whether it merges with your spans or replaces them.
 
@@ -47,8 +52,10 @@ assets be cached forever. Updates come through `registerType: 'autoUpdate'`.
 
 ## Deploy (GitHub Pages)
 
-`.github/workflows/deploy.yml` tests, builds and publishes on every push to `main`, and can be run
-by hand from the Actions tab. One-time setup: **Settings → Pages → Source → GitHub Actions**.
+`.github/workflows/deploy.yml` runs the tests (under UTC, then the four DST timezones), builds, and
+publishes on every push to `main`. It also runs the tests on pull requests, skipping the Pages steps.
+It can be run by hand from the Actions tab. One-time setup:
+**Settings → Pages → Source → GitHub Actions**.
 
 A project site is served from `/<repo>/`, so the workflow builds with `BASE_PATH=/dotlife/`. The
 base is read from `BASE_PATH` in `vite.config.ts` and feeds the manifest `id`, `start_url` and
@@ -78,7 +85,14 @@ above is unaffected. On a custom domain at the root, set `BASE_PATH: /` in the w
 - `src/domain/grid.ts`: the grid always fits the viewport and never scrolls. Time runs bottom-up: the
   earliest dots are at the bottom, and the leftover partial row sits at the bottom holding the first dots.
 - The UI has one dark palette and one accent. There are no themes and no light mode.
+- `src/domain/overlay.ts`: a span's dates become dot indices in whatever scope is on screen. The dot
+  fill already means elapsed or remaining, and `--accent` flips meaning with the lens, so an overlay
+  may only tint the space *behind* a dot, never its fill. Overlapping spans nest into lanes. On a
+  week-dotted grid a short span still fills its whole week dot, the same way `dotLastDay` does.
+- `src/domain/wallpaper.ts`: builds a display list, which `src/wallpaper.ts` paints onto a canvas.
+  Laid out at logical size and scaled up, because `MAX_PITCH` is a CSS-pixel constant — laying out
+  at device pixels would strand a 7-dot week in a huge empty frame.
 
-Not in v1: sync, push notifications, themes, notes on dots, overlaid spans, a native widget.
+Not in v1: sync, push notifications, themes, notes on dots, a native widget.
 
 MIT

@@ -7,6 +7,7 @@ import { InstallNudge } from './components/InstallNudge';
 import { ScopePopover } from './components/ScopePopover';
 import { SettingsSheet } from './components/SettingsSheet';
 import { SpanEditor } from './components/SpanEditor';
+import { WallpaperSheet } from './components/WallpaperSheet';
 import { dotLabel, headline, plural, rangeLabel, startsIn, type Lens } from './domain/format';
 import { overlaysAt, spanOverlays } from './domain/overlay';
 import { PREFERRED_COLS } from './domain/grid';
@@ -29,6 +30,7 @@ export function App() {
   const [popover, setPopover] = useState(false);
   const [editing, setEditing] = useState<FixedSpan | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [wallpaperOpen, setWallpaperOpen] = useState(false);
   const [nudge, setNudge] = useState(false);
   const [preview, setPreview] = useState<Selection | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -176,6 +178,13 @@ export function App() {
                 setPopover(false);
                 setEditing(s);
               }}
+              onWallpaper={() => {
+                setPopover(false);
+                if (!r) return showToast('Set your birth date first');
+                // Ahead has no grid to draw; fall back to the scope's own.
+                if (lens === 'ahead') setLens('left');
+                setWallpaperOpen(true);
+              }}
               onSettings={() => {
                 setPopover(false);
                 setSettingsOpen(true);
@@ -255,6 +264,18 @@ export function App() {
             if (settings.scopeId === id) patchSettings({ scopeId: DEFAULT_SCOPE_ID });
             showToast('Span deleted', { undo: () => { setSpans(before); setToast(null); } });
           }}
+        />
+      )}
+
+      {wallpaperOpen && r && lens !== 'ahead' && (
+        <WallpaperSheet
+          span={active}
+          r={r}
+          headline={headline(r, lens, percentMode)}
+          lens={lens}
+          overlays={overlays}
+          onClose={() => setWallpaperOpen(false)}
+          onToast={(m) => showToast(m)}
         />
       )}
 
