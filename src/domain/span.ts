@@ -24,6 +24,8 @@ export interface Settings {
   nudgeDismissed?: boolean;
   /** Headline shows a percentage instead of a count. */
   headlinePercent?: boolean;
+  /** Draw your spans on top of day- and week-dotted grids. Default on. */
+  showOverlays?: boolean;
 }
 
 export const DERIVED_UNITS: readonly DerivedUnit[] = ['now', 'today', 'week', 'month', 'year', 'life'];

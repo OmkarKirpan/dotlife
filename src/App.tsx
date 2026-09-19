@@ -7,7 +7,9 @@ import { InstallNudge } from './components/InstallNudge';
 import { ScopePopover } from './components/ScopePopover';
 import { SettingsSheet } from './components/SettingsSheet';
 import { SpanEditor } from './components/SpanEditor';
+import { WallpaperSheet } from './components/WallpaperSheet';
 import { dotLabel, headline, plural, rangeLabel, startsIn, type Lens } from './domain/format';
+import { overlaysAt, spanOverlays } from './domain/overlay';
 import { PREFERRED_COLS } from './domain/grid';
 import { DEFAULT_SCOPE_ID, type FixedSpan, type Settings, type Span } from './domain/span';
 import { dotLastDay, dotStart, isDateDotted, isValidDateString, parseLocalDate, resolve, toDateString, type Resolved } from './domain/time';
@@ -28,6 +30,7 @@ export function App() {
   const [popover, setPopover] = useState(false);
   const [editing, setEditing] = useState<FixedSpan | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [wallpaperOpen, setWallpaperOpen] = useState(false);
   const [nudge, setNudge] = useState(false);
   const [preview, setPreview] = useState<Selection | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -87,6 +90,12 @@ export function App() {
     [active, now, settings.lifeStart, settings.lifeYears],
   );
 
+  const showOverlays = settings.showOverlays ?? true;
+  const overlays = useMemo(
+    () => (r && spans && showOverlays ? spanOverlays(r, spans, active!.id) : []),
+    [r, spans, active, showOverlays],
+  );
+
   const selectScope = (id: string) => {
     patchSettings({ scopeId: id });
     setPopover(false);
@@ -142,7 +151,9 @@ export function App() {
       } else {
         line = dotLabel(r.unit, dotStart(r, preview.lo));
         sub = preview.lo < r.elapsed ? 'Gone' : preview.lo === r.elapsed ? 'Now' : 'Ahead';
-        if (isDateDotted(r)) sub += ' · hold or drag to create a span';
+        const here = overlaysAt(overlays, preview.lo);
+        if (here.length > 0) sub += ` · ${here.map((o) => o.label).join(' · ')}`;
+        else if (isDateDotted(r)) sub += ' · hold or drag to create a span';
       }
     }
   }
@@ -166,6 +177,13 @@ export function App() {
               onEdit={(s) => {
                 setPopover(false);
                 setEditing(s);
+              }}
+              onWallpaper={() => {
+                setPopover(false);
+                if (!r) return showToast('Set your birth date first');
+                // Ahead has no grid to draw; fall back to the scope's own.
+                if (lens === 'ahead') setLens('left');
+                setWallpaperOpen(true);
               }}
               onSettings={() => {
                 setPopover(false);
@@ -200,6 +218,7 @@ export function App() {
             preferredCols={active.kind === 'derived' ? PREFERRED_COLS[active.unit] : undefined}
             lens={lens}
             draggable={isDateDotted(r)}
+            overlays={overlays}
             onPreview={setPreview}
             onCreate={createFromSelection}
           />
@@ -245,6 +264,18 @@ export function App() {
             if (settings.scopeId === id) patchSettings({ scopeId: DEFAULT_SCOPE_ID });
             showToast('Span deleted', { undo: () => { setSpans(before); setToast(null); } });
           }}
+        />
+      )}
+
+      {wallpaperOpen && r && lens !== 'ahead' && (
+        <WallpaperSheet
+          span={active}
+          r={r}
+          headline={headline(r, lens, percentMode)}
+          lens={lens}
+          overlays={overlays}
+          onClose={() => setWallpaperOpen(false)}
+          onToast={(m) => showToast(m)}
         />
       )}
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Span } from './span';
 import {
   daysLeftInCurrentYear,
+  dotIndexOfDate,
   dotLastDay,
   dotStart,
   nextLocalMidnight,
@@ -164,6 +165,16 @@ describe.runIf(TZ === 'America/New_York')('DST — America/New_York', () => {
     expect(resolve(s, now)).toMatchObject({ total: 31, elapsed: 8 });
   });
 
+  it('dot indices are unaffected by the spring-forward day', () => {
+    const r = resolve(derived('year'), at(2026, 6, 1, 12))!;
+    // Mar 9 is the day after the shift; index is its calendar-day offset, 67.
+    expect(dotIndexOfDate(r, parseLocalDate('2026-03-09'))).toBe(67);
+    // A 10-day span either side of the shift spans the same number of dots.
+    const across = dotIndexOfDate(r, parseLocalDate('2026-03-13'))! - dotIndexOfDate(r, parseLocalDate('2026-03-03'))!;
+    const away = dotIndexOfDate(r, parseLocalDate('2026-07-13'))! - dotIndexOfDate(r, parseLocalDate('2026-07-03'))!;
+    expect(across).toBe(away);
+  });
+
   it('year still has 365 days and midnight stays midnight across DST', () => {
     expect(resolve(derived('year'), at(2026, 3, 9, 0, 30))).toMatchObject({ total: 365, elapsed: 67 });
     const n = nextLocalMidnight(at(2026, 3, 7, 22));
@@ -181,5 +192,46 @@ describe.runIf(TZ === 'Australia/Lord_Howe')('DST — Australia/Lord_Howe (30-mi
 
   it('calendar-day counts survive the half-hour shift', () => {
     expect(resolve(fixed('2026-10-01', '2026-10-31'), at(2026, 10, 5, 0, 15))).toMatchObject({ elapsed: 4 });
+  });
+});
+
+describe('dotIndexOfDate', () => {
+  const year = resolve(derived('year'), at(2026, 6, 15, 12))!;
+
+  it('is the inverse of dotStart and dotLastDay', () => {
+    for (const i of [0, 1, 58, 200, year.total - 1]) {
+      expect(dotIndexOfDate(year, dotStart(year, i))).toBe(i);
+      expect(dotIndexOfDate(year, dotLastDay(year, i))).toBe(i);
+    }
+  });
+
+  it('maps a known date to its calendar-day offset', () => {
+    expect(dotIndexOfDate(year, parseLocalDate('2026-01-01'))).toBe(0);
+    expect(dotIndexOfDate(year, parseLocalDate('2026-03-01'))).toBe(59); // 31 + 28
+    expect(dotIndexOfDate(year, parseLocalDate('2026-12-31'))).toBe(364);
+  });
+
+  it('counts the leap day', () => {
+    const leap = resolve(derived('year'), at(2028, 6, 15, 12))!;
+    expect(leap.total).toBe(366);
+    expect(dotIndexOfDate(leap, parseLocalDate('2028-03-01'))).toBe(60);
+  });
+
+  it('is null outside the scope', () => {
+    expect(dotIndexOfDate(year, parseLocalDate('2025-12-31'))).toBeNull();
+    expect(dotIndexOfDate(year, parseLocalDate('2027-01-01'))).toBeNull();
+  });
+
+  it('is null where a dot is not a date', () => {
+    expect(dotIndexOfDate(resolve(derived('now'), at(2026, 6, 15, 12))!, parseLocalDate('2026-06-15'))).toBeNull();
+    expect(dotIndexOfDate(resolve(derived('today'), at(2026, 6, 15, 12))!, parseLocalDate('2026-06-15'))).toBeNull();
+  });
+
+  it('floors to the week on week-dotted scopes', () => {
+    const life = resolve(derived('life'), at(2026, 6, 15, 12), { lifeStart: '1990-06-15', lifeYears: 80 })!;
+    expect(life.unit).toBe('week');
+    expect(dotIndexOfDate(life, parseLocalDate('1990-06-15'))).toBe(0);
+    expect(dotIndexOfDate(life, parseLocalDate('1990-06-21'))).toBe(0);
+    expect(dotIndexOfDate(life, parseLocalDate('1990-06-22'))).toBe(1);
   });
 });

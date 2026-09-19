@@ -93,6 +93,24 @@ export function SettingsSheet({ spans, settings, onSettings, onSpans, onClose, o
       </section>
 
       <section className="form">
+        <h3>Grid</h3>
+        <div className="segmented" role="radiogroup" aria-label="Span overlays">
+          {([true, false] as const).map((on) => (
+            <button
+              key={String(on)}
+              role="radio"
+              aria-checked={(settings.showOverlays ?? true) === on}
+              className={(settings.showOverlays ?? true) === on ? 'on' : ''}
+              onClick={() => onSettings({ showOverlays: on })}
+            >
+              {on ? 'Show my spans' : 'Dots only'}
+            </button>
+          ))}
+        </div>
+        <p className="muted">Spans are drawn as tinted bands on day- and week-dotted grids.</p>
+      </section>
+
+      <section className="form">
         <h3>Export</h3>
         <div className="actions">
           <button className="btn primary" onClick={copy}>Copy JSON</button>
