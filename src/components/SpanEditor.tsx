@@ -5,12 +5,14 @@ import { Sheet } from './Sheet';
 
 interface Props {
   span: FixedSpan;
+  /** A span that has never been saved: no delete, and the title says so. */
+  isNew?: boolean;
   onSave: (span: FixedSpan) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
 }
 
-export function SpanEditor({ span, onSave, onDelete, onClose }: Props) {
+export function SpanEditor({ span, isNew, onSave, onDelete, onClose }: Props) {
   const [label, setLabel] = useState(span.label);
   const [start, setStart] = useState(span.start);
   const [end, setEnd] = useState(span.end);
@@ -26,7 +28,7 @@ export function SpanEditor({ span, onSave, onDelete, onClose }: Props) {
   };
 
   return (
-    <Sheet title="Edit span" onClose={onClose}>
+    <Sheet title={isNew ? 'New span' : 'Edit span'} onClose={onClose}>
       <form
         className="form"
         onSubmit={(e) => {
@@ -52,17 +54,18 @@ export function SpanEditor({ span, onSave, onDelete, onClose }: Props) {
         <div className="actions">
           <button
             type="button"
-            className={`btn danger${confirming ? ' confirm' : ''}`}
+            className={isNew ? 'btn' : `btn danger${confirming ? ' confirm' : ''}`}
             onClick={() => {
+              if (isNew) return onClose();
               if (!confirming) return setConfirming(true);
               onDelete(span.id);
               onClose();
             }}
           >
-            {confirming ? 'Tap again to delete' : 'Delete'}
+            {isNew ? 'Cancel' : confirming ? 'Tap again to delete' : 'Delete'}
           </button>
           <button type="submit" className="btn primary" disabled={!canSave}>
-            Save
+            {isNew ? 'Create' : 'Save'}
           </button>
         </div>
       </form>

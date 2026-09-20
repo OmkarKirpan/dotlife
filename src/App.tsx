@@ -12,7 +12,7 @@ import { dotLabel, headline, plural, rangeLabel, startsIn, type Lens } from './d
 import { overlaysAt, spanOverlays } from './domain/overlay';
 import { PREFERRED_COLS } from './domain/grid';
 import { DEFAULT_SCOPE_ID, type FixedSpan, type Settings, type Span } from './domain/span';
-import { dotLastDay, dotStart, isDateDotted, isValidDateString, parseLocalDate, resolve, toDateString, type Resolved } from './domain/time';
+import { dotLastDay, dotStart, isDateDotted, isSteppable, isValidDateString, parseLocalDate, resolve, stepAnchor, toDateString, type Resolved } from './domain/time';
 import { isStandalone, useNow } from './hooks';
 import { load, newId, requestPersistence, saveSettings, saveSpans } from './store';
 
@@ -31,6 +31,7 @@ export function App() {
   const [editing, setEditing] = useState<FixedSpan | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [wallpaperOpen, setWallpaperOpen] = useState(false);
+  const [anchor, setAnchor] = useState<Date | null>(null);
   const [nudge, setNudge] = useState(false);
   const [preview, setPreview] = useState<Selection | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -110,9 +111,14 @@ export function App() {
     return spans.find((s) => s.id === settings.scopeId) ?? spans.find((s) => s.id === DEFAULT_SCOPE_ID) ?? spans[0];
   }, [spans, settings.scopeId]);
 
+  // null means "wherever now is", so the window follows the clock instead of
+  // freezing at the moment the scope was opened.
   const r = useMemo(
-    () => (active ? resolve(active, now, { lifeStart: settings.lifeStart, lifeYears: settings.lifeYears }) : null),
-    [active, now, settings.lifeStart, settings.lifeYears],
+    () =>
+      active
+        ? resolve(active, now, { lifeStart: settings.lifeStart, lifeYears: settings.lifeYears }, anchor ?? now)
+        : null,
+    [active, now, anchor, settings.lifeStart, settings.lifeYears],
   );
 
   const showOverlays = settings.showOverlays ?? true;
@@ -124,7 +130,20 @@ export function App() {
   const selectScope = (id: string) => {
     patchSettings({ scopeId: id });
     setPopover(false);
+    setAnchor(null); // a new scope starts at now, not wherever the last one was left
     if (lens === 'ahead') setLens('left');
+  };
+
+  const step = (delta: number) => {
+    if (!active || active.kind !== 'derived') return;
+    setAnchor((a) => stepAnchor(active.unit, a ?? now, delta));
+  };
+
+  /** A span you can place anywhere, rather than only where you can drag. */
+  const newSpan = () => {
+    const today = toDateString(now);
+    setPopover(false);
+    setEditing({ id: newId(), kind: 'fixed', start: today, end: today, label: rangeLabel(today, today, now) });
   };
 
   const createFromSelection = (sel: Selection) => {
@@ -186,6 +205,7 @@ export function App() {
   return (
     <div className="app">
       <header className="header">
+        <div className="scope-row">
         <div className="scope-wrap">
           <button className="scope-btn" onClick={() => setPopover((p) => !p)} aria-haspopup="menu" aria-expanded={popover}>
             {title}
@@ -203,6 +223,7 @@ export function App() {
                 setPopover(false);
                 setEditing(s);
               }}
+              onNewSpan={newSpan}
               onWallpaper={() => {
                 setPopover(false);
                 if (!r) return showToast('Set your birth date first');
@@ -218,6 +239,22 @@ export function App() {
             />
           )}
         </div>
+        {lens !== 'ahead' && isSteppable(active) && (
+          <div className="stepper">
+            <button onClick={() => step(-1)} aria-label={`Previous ${active.label.toLowerCase()}`}>
+              <Chevron dir="left" />
+            </button>
+            {anchor && (
+              <button className="now-btn" onClick={() => setAnchor(null)}>
+                Now
+              </button>
+            )}
+            <button onClick={() => step(1)} aria-label={`Next ${active.label.toLowerCase()}`}>
+              <Chevron dir="right" />
+            </button>
+          </div>
+        )}
+        </div>
         <button
           className={`headline${preview?.creating ? ' creating' : ''}`}
           onClick={() => lens !== 'ahead' && patchSettings({ headlinePercent: !percentMode })}
@@ -225,7 +262,9 @@ export function App() {
         >
           {line}
         </button>
-        <p className="subline">{sub}</p>
+        <p className="subline" aria-live="polite">
+          {sub}
+        </p>
       </header>
 
       <main className="stage">
@@ -281,9 +320,14 @@ export function App() {
       {editing && (
         <SpanEditor
           span={editing}
+          isNew={!spans.some((x) => x.id === editing.id)}
           onClose={() => setEditing(null)}
-          onSave={(s) => setSpans(spans.map((x) => (x.id === s.id ? s : x)))}
+          onSave={(s) =>
+            setSpans(spans.some((x) => x.id === s.id) ? spans.map((x) => (x.id === s.id ? s : x)) : [...spans, s])
+          }
           onDelete={(id) => {
+            // A span that was never saved just goes away; nothing to undo.
+            if (!spans.some((x) => x.id === id)) return;
             const before = spans;
             setSpans(spans.filter((x) => x.id !== id));
             if (settings.scopeId === id) patchSettings({ scopeId: DEFAULT_SCOPE_ID });
@@ -327,6 +371,21 @@ function scopeSubline(r: Resolved): string {
 }
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+function Chevron({ dir }: { dir: 'left' | 'right' }) {
+  return (
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+      <path
+        d={dir === 'left' ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7'}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 function LifeSetup({ onSet }: { onSet: (d: string) => void }) {
   const [v, setV] = useState('');

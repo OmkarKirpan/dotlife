@@ -3,6 +3,8 @@ import type { Span } from './span';
 import {
   daysLeftInCurrentYear,
   dotIndexOfDate,
+  isSteppable,
+  stepAnchor,
   dotLastDay,
   dotStart,
   nextLocalMidnight,
@@ -233,5 +235,83 @@ describe('dotIndexOfDate', () => {
     expect(dotIndexOfDate(life, parseLocalDate('1990-06-15'))).toBe(0);
     expect(dotIndexOfDate(life, parseLocalDate('1990-06-21'))).toBe(0);
     expect(dotIndexOfDate(life, parseLocalDate('1990-06-22'))).toBe(1);
+  });
+});
+
+describe('anchor', () => {
+  const now = at(2026, 6, 15, 12);
+
+  it('defaults to now, changing nothing', () => {
+    expect(resolve(derived('year'), now)).toEqual(resolve(derived('year'), now, {}, now));
+  });
+
+  it('shows a past window fully elapsed', () => {
+    const last = resolve(derived('year'), now, {}, at(2025, 6, 15, 12))!;
+    expect(last.total).toBe(365);
+    expect(last.elapsed).toBe(365);
+    expect(last.remaining).toBe(0);
+    expect(toDateString(last.start)).toBe('2025-01-01');
+  });
+
+  it('shows a future window empty', () => {
+    const next = resolve(derived('year'), now, {}, at(2027, 6, 15, 12))!;
+    expect(next.total).toBe(365);
+    expect(next.elapsed).toBe(0);
+    expect(next.remaining).toBe(365);
+    expect(toDateString(next.start)).toBe('2027-01-01');
+  });
+
+  it('keeps the window true to the anchored period, not to now', () => {
+    // February 2028 is a leap month; anchoring there must not borrow June's length.
+    const feb = resolve(derived('month'), now, {}, at(2028, 2, 10, 12))!;
+    expect(feb.total).toBe(29);
+    expect(toDateString(feb.start)).toBe('2028-02-01');
+  });
+
+  it('anchors every steppable scope', () => {
+    const anchor = at(2027, 3, 10, 9);
+    expect(toDateString(resolve(derived('today'), now, {}, anchor)!.start)).toBe('2027-03-10');
+    expect(toDateString(resolve(derived('week'), now, {}, anchor)!.start)).toBe('2027-03-08'); // Monday
+    expect(resolve(derived('now'), now, {}, anchor)!.start.getHours()).toBe(9);
+  });
+
+  it('ignores the anchor for Life and for fixed spans', () => {
+    const ctx = { lifeStart: '1990-06-15', lifeYears: 80 };
+    const a = resolve(derived('life'), now, ctx)!;
+    const b = resolve(derived('life'), now, ctx, at(2040, 1, 1))!;
+    expect(a).toEqual(b);
+    expect(resolve(fixed('2026-03-01', '2026-03-31'), now)).toEqual(
+      resolve(fixed('2026-03-01', '2026-03-31'), now, {}, at(2030, 1, 1)),
+    );
+  });
+});
+
+describe('stepAnchor', () => {
+  const anchor = at(2026, 3, 15, 10);
+
+  it('moves by one window of the scope', () => {
+    expect(toDateString(stepAnchor('year', anchor, 1))).toBe('2027-03-15');
+    expect(toDateString(stepAnchor('month', anchor, -1))).toBe('2026-02-15');
+    expect(toDateString(stepAnchor('week', anchor, 1))).toBe('2026-03-22');
+    expect(toDateString(stepAnchor('today', anchor, -1))).toBe('2026-03-14');
+    expect(stepAnchor('now', anchor, 2).getHours()).toBe(12);
+  });
+
+  it('clamps a month step to the shorter month', () => {
+    // date-fns keeps Jan 31 from overflowing into March.
+    expect(toDateString(stepAnchor('month', at(2026, 1, 31, 10), 1))).toBe('2026-02-28');
+  });
+
+  it('round-trips', () => {
+    for (const u of ['now', 'today', 'week', 'month', 'year'] as const) {
+      expect(stepAnchor(u, stepAnchor(u, anchor, 3), -3)).toEqual(anchor);
+    }
+  });
+
+  it('leaves Life alone, because its window comes from a birth date', () => {
+    expect(stepAnchor('life', anchor, 5)).toEqual(anchor);
+    expect(isSteppable(derived('life'))).toBe(false);
+    expect(isSteppable(derived('year'))).toBe(true);
+    expect(isSteppable(fixed('2026-01-01', '2026-01-31'))).toBe(false);
   });
 });
