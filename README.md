@@ -11,6 +11,11 @@ No backend, no accounts, no analytics. Your data lives in this browser's Indexed
 - **Make a span**: on any day- or week-dotted grid, drag across dots, or press and hold one dot for a single day.
   It saves when you let go, named from its dates (`Sep 28 – Oct 28`). **Undo** is in the toast.
 - **Rename or delete**: press and hold a span in the scope menu or in Ahead (right-click on desktop).
+- **Any date, not just this one**: the chevrons beside the scope name step back and forward a window at a
+  time — last year, next month — and **Now** returns. Drag on a stepped grid to plan a span there.
+  **New span…** in the scope menu places one by date instead.
+- **Keyboard**: tab to the grid, arrow keys move through the dots, shift-arrow selects a range, Enter
+  creates a span from it, Escape clears the selection.
 - **See your spans**: they are drawn as tinted bands on any day- or week-dotted grid, so a trip shows
   up inside your year. Press a dot to name the spans covering it. Settings → Grid turns them off.
 - **Wallpaper**: scope menu → Wallpaper. Draws the current grid at your phone's resolution, with the
@@ -19,7 +24,9 @@ No backend, no accounts, no analytics. Your data lives in this browser's Indexed
 - **Back up**: Settings → Copy JSON or Download. Import checks `version` and rejects the whole file
   if anything is wrong. You choose whether it merges with your spans or replaces them.
 
-The app icon badge always shows **days left in the year**. It updates on launch, when the app comes back
+The app icon badge counts down **whatever scope you are on**, as long as one dot is a day or a week.
+This hour and Today fall back to days left in the year: a minute or hour count would be wrong within
+the hour and nothing refreshes it in the background. It updates on launch, when the app comes back
 to the foreground, and at local midnight while it is open. iOS has no background refresh, so if the app
 stays closed for a week the badge will be out of date by seven.
 
@@ -85,6 +92,13 @@ above is unaffected. On a custom domain at the root, set `BASE_PATH: /` in the w
 - `src/domain/grid.ts`: the grid always fits the viewport and never scrolls. Time runs bottom-up: the
   earliest dots are at the bottom, and the leftover partial row sits at the bottom holding the first dots.
 - The UI has one dark palette and one accent. There are no themes and no light mode.
+- `resolve` takes an `anchor` separate from `now`: the anchor picks the window, `now` fills it. It
+  defaults to `now`, and `build` clamps, so a past window comes back fully elapsed and a future one
+  empty with no special cases. Life and fixed spans ignore it — their windows come from a birth date
+  and from their own dates.
+- Writes to IndexedDB can fail, and there is no server copy. `saveSpans` and `saveSettings` reject on
+  failure and `App` rolls the optimistic state back, so the screen never claims a save that did not
+  happen.
 - `src/domain/overlay.ts`: a span's dates become dot indices in whatever scope is on screen. The dot
   fill already means elapsed or remaining, and `--accent` flips meaning with the lens, so an overlay
   may only tint the space *behind* a dot, never its fill. Overlapping spans nest into lanes. On a

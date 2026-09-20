@@ -1,24 +1,39 @@
-import { daysLeftInCurrentYear, nextLocalMidnight } from './domain/time';
+import type { Span } from './domain/span';
+import { daysLeftInCurrentYear, isDateDotted, nextLocalMidnight, resolve, type ResolveContext } from './domain/time';
 
 type BadgeNavigator = Navigator & {
   setAppBadge?: (n?: number) => Promise<void>;
 };
 
-/** The badge always shows days left in the year, whatever scope is on screen. */
-export function syncBadge(now = new Date()): number {
-  const days = daysLeftInCurrentYear(now);
-  (navigator as BadgeNavigator).setAppBadge?.(days)?.catch(() => {});
-  return days;
+/**
+ * What the badge should read for a given scope.
+ *
+ * Minute and hour counts are excluded on purpose: they are wrong within the
+ * hour, and there is no background refresh to correct them, so they would be
+ * confidently stale all day. Those scopes fall back to days left in the year,
+ * which is what the badge has always shown.
+ */
+export function badgeValue(span: Span | null, now: Date, ctx: ResolveContext = {}): number {
+  const r = span ? resolve(span, now, ctx) : null;
+  return r && isDateDotted(r) ? r.remaining : daysLeftInCurrentYear(now);
+}
+
+export function setBadge(value: number): void {
+  (navigator as BadgeNavigator).setAppBadge?.(value)?.catch(() => {});
 }
 
 /**
  * Update on launch, on becoming visible, and at each local midnight while open.
  * There is no background refresh on iOS — a week unopened means a badge stale by seven.
  */
-export function startBadgeLifecycle(onSync?: (days: number) => void): () => void {
+export function startBadgeLifecycle(compute: (now: Date) => number, onSync?: (value: number) => void): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const run = () => onSync?.(syncBadge());
+  const run = () => {
+    const value = compute(new Date());
+    setBadge(value);
+    onSync?.(value);
+  };
 
   const arm = () => {
     clearTimeout(timer);

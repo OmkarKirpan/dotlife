@@ -9,6 +9,8 @@ export interface Selection {
   hi: number;
   /** false = a plain press that only inspects one dot. */
   creating: boolean;
+  /** Which input is driving this, so the hint can name the right gesture. */
+  via: 'pointer' | 'key';
 }
 
 interface Props {
@@ -89,6 +91,8 @@ export function Grid({ r, preferredCols, lens, draggable, overlays, onPreview, o
   const drag = useRef<Drag | null>(null);
   const holdTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [sel, setSel] = useState<Selection | null>(null);
+  /** Keyboard equivalent of a drag: anchor stays put, cursor moves. */
+  const [kb, setKb] = useState<{ anchor: number; cursor: number } | null>(null);
 
   const layout = useMemo(
     () => (size.width > 0 ? computeLayout(r.total, size.width, size.height, preferredCols) : null),
@@ -104,8 +108,8 @@ export function Grid({ r, preferredCols, lens, draggable, overlays, onPreview, o
   const show = (d: Drag) => {
     const creating = draggable && (d.moved || d.held);
     const s: Selection = creating
-      ? { lo: Math.min(d.anchor, d.current), hi: Math.max(d.anchor, d.current), creating }
-      : { lo: d.current, hi: d.current, creating };
+      ? { lo: Math.min(d.anchor, d.current), hi: Math.max(d.anchor, d.current), creating, via: 'pointer' }
+      : { lo: d.current, hi: d.current, creating, via: 'pointer' };
     setSel(s);
     onPreview(s);
   };
@@ -117,7 +121,7 @@ export function Grid({ r, preferredCols, lens, draggable, overlays, onPreview, o
     setSel(null);
     onPreview(null);
     if (commit && d && draggable && (d.moved || d.held)) {
-      onCreate({ lo: Math.min(d.anchor, d.current), hi: Math.max(d.anchor, d.current), creating: true });
+      onCreate({ lo: Math.min(d.anchor, d.current), hi: Math.max(d.anchor, d.current), creating: true, via: 'pointer' });
     }
   };
 
@@ -153,17 +157,78 @@ export function Grid({ r, preferredCols, lens, draggable, overlays, onPreview, o
     show(d);
   };
 
+  const showKb = (next: { anchor: number; cursor: number } | null) => {
+    setKb(next);
+    if (!next) return onPreview(null);
+    const lo = Math.min(next.anchor, next.cursor);
+    const hi = Math.max(next.anchor, next.cursor);
+    onPreview({ lo, hi, creating: draggable && lo !== hi, via: 'key' });
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent<SVGSVGElement>) => {
+    if (!layout) return;
+    const cur = kb ?? { anchor: Math.min(r.elapsed, r.total - 1), cursor: Math.min(r.elapsed, r.total - 1) };
+    // Time runs bottom-up, so visually up is later: a whole row forward.
+    const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowDown: -layout.cols, ArrowUp: layout.cols }[e.key];
+
+    if (delta !== undefined) {
+      e.preventDefault();
+      const cursor = Math.min(r.total - 1, Math.max(0, cur.cursor + delta));
+      // Shift keeps the anchor, which is how a range gets selected.
+      showKb({ anchor: e.shiftKey ? cur.anchor : cursor, cursor });
+      return;
+    }
+    if (e.key === 'Home' || e.key === 'End') {
+      e.preventDefault();
+      const cursor = e.key === 'Home' ? 0 : r.total - 1;
+      showKb({ anchor: e.shiftKey ? cur.anchor : cursor, cursor });
+      return;
+    }
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      if (!draggable) return;
+      onCreate({ lo: Math.min(cur.anchor, cur.cursor), hi: Math.max(cur.anchor, cur.cursor), creating: true, via: 'key' });
+      showKb({ anchor: cur.cursor, cursor: cur.cursor });
+      return;
+    }
+    if (e.key === 'Escape' && kb) {
+      e.preventDefault();
+      showKb({ anchor: cur.cursor, cursor: cur.cursor });
+    }
+  };
+
+  // A pointer press wins while it is happening; otherwise the keyboard shows.
+  const shown =
+    sel ??
+    (kb
+      ? {
+          lo: Math.min(kb.anchor, kb.cursor),
+          hi: Math.max(kb.anchor, kb.cursor),
+          creating: draggable && kb.anchor !== kb.cursor,
+          via: 'key' as const,
+        }
+      : null);
+
   return (
     <div className="grid-box" ref={boxRef}>
       {layout && (
         <svg
           ref={svgRef}
-          className={`grid lens-${lens}${sel ? ' pressing' : ''}`}
+          className={`grid lens-${lens}${shown ? ' pressing' : ''}`}
           width={layout.width}
           height={layout.height}
           viewBox={`0 0 ${layout.width} ${layout.height}`}
           role="img"
-          aria-label={`${r.total} dots, ${r.elapsed} elapsed, ${r.remaining} remaining`}
+          tabIndex={0}
+          aria-label={
+            `${r.total} dots, ${r.elapsed} elapsed, ${r.remaining} remaining.` +
+            (draggable
+              ? ' Arrow keys move through the dots, shift and arrow selects a range, Enter creates a span.'
+              : ' Arrow keys move through the dots.')
+          }
+          onKeyDown={onKeyDown}
+          onFocus={() => !kb && showKb({ anchor: Math.min(r.elapsed, r.total - 1), cursor: Math.min(r.elapsed, r.total - 1) })}
+          onBlur={() => showKb(null)}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={(e) => drag.current?.pointerId === e.pointerId && end(true)}
@@ -172,7 +237,7 @@ export function Grid({ r, preferredCols, lens, draggable, overlays, onPreview, o
         >
           {overlays && overlays.length > 0 && <OverlayLayer layout={layout} overlays={overlays} />}
           <DotLayer layout={layout} r={r} />
-          {sel && <SelectionLayer layout={layout} sel={sel} />}
+          {shown && <SelectionLayer layout={layout} sel={shown} />}
         </svg>
       )}
     </div>

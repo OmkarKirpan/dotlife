@@ -2,6 +2,7 @@ import {
   addDays,
   addHours,
   addMinutes,
+  addMonths,
   addYears,
   differenceInCalendarDays,
   differenceInHours,
@@ -14,7 +15,7 @@ import {
   startOfWeek,
   startOfYear,
 } from 'date-fns';
-import { DEFAULT_LIFE_YEARS, type DotUnit, type Span } from './span';
+import { DEFAULT_LIFE_YEARS, type DerivedUnit, type DotUnit, type Span } from './span';
 
 /**
  * Local wall-clock throughout. Boundaries at local midnight.
@@ -98,7 +99,7 @@ function weekRange(start: Date, endExclusive: Date, now: Date): Resolved {
  * `elapsed` counts fully-passed dots; the dot containing `now` is the first
  * remaining one. So on Dec 31 the year has 1 day left, not 0.
  */
-export function resolve(span: Span, now: Date, ctx: ResolveContext = {}): Resolved | null {
+export function resolve(span: Span, now: Date, ctx: ResolveContext = {}, anchor: Date = now): Resolved | null {
   if (span.kind === 'fixed') {
     const start = parseLocalDate(span.start);
     const endExclusive = addDays(parseLocalDate(span.end), 1);
@@ -108,14 +109,17 @@ export function resolve(span: Span, now: Date, ctx: ResolveContext = {}): Resolv
       : dayRange(start, endExclusive, now);
   }
 
+  // `anchor` picks the window, `now` fills it. With anchor === now (the
+  // default) nothing changes; step the anchor and a past window comes back
+  // fully elapsed and a future one empty, because `build` clamps.
   switch (span.unit) {
     case 'now': {
-      const start = startOfHour(now);
+      const start = startOfHour(anchor);
       const end = addHours(start, 1);
       return build(start, end, 'minute', differenceInMinutes(end, start), differenceInMinutes(now, start));
     }
     case 'today': {
-      const start = startOfDay(now);
+      const start = startOfDay(anchor);
       const end = startOfDay(addDays(start, 1));
       // 23 or 25 on DST transition days — those hours really do (not) exist.
       // Ceil so half-hour shifts (Lord Howe) keep the last partial hour as a dot.
@@ -123,15 +127,15 @@ export function resolve(span: Span, now: Date, ctx: ResolveContext = {}): Resolv
       return build(start, end, 'hour', total, differenceInHours(now, start));
     }
     case 'week': {
-      const start = startOfWeek(now, { weekStartsOn: WEEK_STARTS_ON });
+      const start = startOfWeek(anchor, { weekStartsOn: WEEK_STARTS_ON });
       return dayRange(start, addDays(start, 7), now);
     }
     case 'month': {
-      const start = startOfMonth(now);
+      const start = startOfMonth(anchor);
       return dayRange(start, addDays(start, getDaysInMonth(start)), now);
     }
     case 'year': {
-      const start = startOfYear(now);
+      const start = startOfYear(anchor);
       return dayRange(start, addYears(start, 1), now);
     }
     case 'life': {
@@ -166,6 +170,32 @@ export function dotLastDay(r: Resolved, i: number): Date {
 /** Scopes where a dot is at least a day, so a drag maps to a date range. */
 export function isDateDotted(r: Resolved): boolean {
   return r.unit === 'day' || r.unit === 'week';
+}
+
+/**
+ * Move the anchor by `delta` windows of this scope. Life is a fixed window
+ * from a birth date and fixed spans have their own dates, so neither steps.
+ */
+export function stepAnchor(unit: DerivedUnit, anchor: Date, delta: number): Date {
+  switch (unit) {
+    case 'now':
+      return addHours(anchor, delta);
+    case 'today':
+      return addDays(anchor, delta);
+    case 'week':
+      return addDays(anchor, delta * 7);
+    case 'month':
+      return addMonths(anchor, delta);
+    case 'year':
+      return addYears(anchor, delta);
+    case 'life':
+      return anchor;
+  }
+}
+
+/** Scopes whose window can be stepped backwards and forwards. */
+export function isSteppable(span: Span): boolean {
+  return span.kind === 'derived' && span.unit !== 'life';
 }
 
 export function daysLeftInCurrentYear(now: Date): number {

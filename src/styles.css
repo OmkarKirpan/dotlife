@@ -45,7 +45,18 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 
 /* ---- header ---------------------------------------------------------- */
 .header { padding: 14px 20px 4px; user-select: none; -webkit-user-select: none; }
+.scope-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .scope-wrap { position: relative; display: inline-block; }
+.stepper { display: inline-flex; align-items: center; gap: 2px; color: var(--text-2); }
+.stepper button {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border-radius: 9px;
+}
+.stepper button:hover { background: var(--surface-2); color: var(--text); }
+.stepper .now-btn {
+  width: auto; padding: 0 10px; font-size: 13px; font-weight: 600;
+  color: var(--accent);
+}
 .scope-btn {
   display: inline-flex; align-items: center; gap: 6px;
   color: var(--text-2); font-size: 15px; font-weight: 600; letter-spacing: 0.01em;
@@ -103,6 +114,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
   cursor: crosshair;
 }
+.grid:focus { outline: none; }
+.grid:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 10px; }
 .dot { transition: fill 0.2s; }
 .lens-left .dot.e { fill: var(--dot-muted); }
 .lens-left .dot.r { fill: var(--accent); }
