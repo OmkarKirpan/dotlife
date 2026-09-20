@@ -20,6 +20,11 @@ export async function load(): Promise<Loaded> {
   return { spans, settings: settings ?? {}, firstRun: false };
 }
 
+/**
+ * These reject when the write fails — quota exceeded, private mode, storage
+ * evicted mid-session. There is no server copy, so a caller that drops the
+ * rejection is telling the user their data is safe when it is gone. Handle it.
+ */
 export const saveSpans = (spans: Span[]) => set(SPANS, spans);
 export const saveSettings = (settings: Settings) => set(SETTINGS, settings);
 

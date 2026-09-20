@@ -36,38 +36,20 @@ export function App() {
   const [toast, setToast] = useState<Toast | null>(null);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
+  // Holds the last state known to be on disk, so a failed write can roll back.
+  const spansRef = useRef<Span[]>([]);
   const now = useNow();
 
   // ---- persistence -------------------------------------------------------
   useEffect(() => {
     load().then(async ({ spans, settings, firstRun }) => {
+      spansRef.current = spans;
       setSpansState(spans);
       setSettingsState(settings);
       if (firstRun) await requestPersistence();
       if (!isStandalone() && !settings.nudgeDismissed) setNudge(true);
     });
   }, []);
-
-  const setSpans = useCallback((next: Span[]) => {
-    setSpansState(next);
-    saveSpans(next);
-  }, []);
-
-  const patchSettings = useCallback((patch: Partial<Settings>) => {
-    const next = { ...settingsRef.current, ...patch };
-    settingsRef.current = next;
-    setSettingsState(next);
-    saveSettings(next);
-  }, []);
-
-  // ---- badge -------------------------------------------------------------
-  useEffect(
-    () =>
-      startBadgeLifecycle((days) => {
-        if (settingsRef.current.lastBadge !== days) patchSettings({ lastBadge: days });
-      }),
-    [patchSettings],
-  );
 
   // ---- toast -------------------------------------------------------------
   const showToast = useCallback((msg: string, extra: Omit<Toast, 'id' | 'msg'> = {}) => {
@@ -78,6 +60,49 @@ export function App() {
     const t = setTimeout(() => setToast((c) => (c?.id === toast.id ? null : c)), toast.undo ? 5000 : 2500);
     return () => clearTimeout(t);
   }, [toast]);
+
+  /**
+   * A write can fail — quota, private mode, evicted storage — and there is no
+   * server copy to fall back on. Roll the optimistic state back so the screen
+   * never claims something was saved when it was not.
+   */
+  const setSpans = useCallback(
+    (next: Span[]) => {
+      const before = spansRef.current;
+      spansRef.current = next;
+      setSpansState(next);
+      saveSpans(next).catch(() => {
+        spansRef.current = before;
+        setSpansState(before);
+        showToast('Could not save — storage may be full. Export your spans.');
+      });
+    },
+    [showToast],
+  );
+
+  const patchSettings = useCallback(
+    (patch: Partial<Settings>) => {
+      const before = settingsRef.current;
+      const next = { ...before, ...patch };
+      settingsRef.current = next;
+      setSettingsState(next);
+      saveSettings(next).catch(() => {
+        settingsRef.current = before;
+        setSettingsState(before);
+        showToast('Could not save that setting.');
+      });
+    },
+    [showToast],
+  );
+
+  // ---- badge -------------------------------------------------------------
+  useEffect(
+    () =>
+      startBadgeLifecycle((days) => {
+        if (settingsRef.current.lastBadge !== days) patchSettings({ lastBadge: days });
+      }),
+    [patchSettings],
+  );
 
   // ---- derived view state -----------------------------------------------
   const active = useMemo(() => {
