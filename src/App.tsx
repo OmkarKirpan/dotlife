@@ -1,6 +1,6 @@
 import { differenceInCalendarDays, format } from 'date-fns';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { startBadgeLifecycle } from './badge';
+import { badgeValue, startBadgeLifecycle } from './badge';
 import { AheadList } from './components/AheadList';
 import { Grid, type Selection } from './components/Grid';
 import { InstallNudge } from './components/InstallNudge';
@@ -96,20 +96,25 @@ export function App() {
     [showToast],
   );
 
-  // ---- badge -------------------------------------------------------------
-  useEffect(
-    () =>
-      startBadgeLifecycle((days) => {
-        if (settingsRef.current.lastBadge !== days) patchSettings({ lastBadge: days });
-      }),
-    [patchSettings],
-  );
-
   // ---- derived view state -----------------------------------------------
   const active = useMemo(() => {
     if (!spans) return null;
     return spans.find((s) => s.id === settings.scopeId) ?? spans.find((s) => s.id === DEFAULT_SCOPE_ID) ?? spans[0];
   }, [spans, settings.scopeId]);
+
+  // ---- badge -------------------------------------------------------------
+  // Re-armed when the scope changes, which is also what re-syncs the badge.
+  // It always counts from the real now, never from a stepped anchor.
+  useEffect(() => {
+    if (!active) return;
+    const ctx = { lifeStart: settings.lifeStart, lifeYears: settings.lifeYears };
+    return startBadgeLifecycle(
+      (n) => badgeValue(active, n, ctx),
+      (value) => {
+        if (settingsRef.current.lastBadge !== value) patchSettings({ lastBadge: value });
+      },
+    );
+  }, [active, settings.lifeStart, settings.lifeYears, patchSettings]);
 
   // null means "wherever now is", so the window follows the clock instead of
   // freezing at the moment the scope was opened.
@@ -191,13 +196,15 @@ export function App() {
         const e = toDateString(dotLastDay(r, preview.hi));
         const days = differenceInCalendarDays(parseLocalDate(e), parseLocalDate(s)) + 1;
         line = rangeLabel(s, e, now);
-        sub = `Release to create · ${plural(days, 'day')}`;
+        sub = `${preview.via === 'key' ? 'Enter' : 'Release'} to create · ${plural(days, 'day')}`;
       } else {
         line = dotLabel(r.unit, dotStart(r, preview.lo));
         sub = preview.lo < r.elapsed ? 'Gone' : preview.lo === r.elapsed ? 'Now' : 'Ahead';
         const here = overlaysAt(overlays, preview.lo);
         if (here.length > 0) sub += ` · ${here.map((o) => o.label).join(' · ')}`;
-        else if (isDateDotted(r)) sub += ' · hold or drag to create a span';
+        else if (isDateDotted(r)) {
+          sub += preview.via === 'key' ? ' · shift-arrow to select, Enter to create' : ' · hold or drag to create a span';
+        }
       }
     }
   }
